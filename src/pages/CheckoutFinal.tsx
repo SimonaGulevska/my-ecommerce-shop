@@ -1,58 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
-export default function CheckoutFinal() {
+interface CheckoutFinalProps {
+  cart: any[];
+  clearCart: () => void;
+}
+
+export default function CheckoutFinal({ cart, clearCart }: CheckoutFinalProps) {
   const navigate = useNavigate();
-  const currentUser = JSON.parse(localStorage.getItem('district_current_user') || 'null');
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   const [shippingData, setShippingData] = useState({
-    fullName: currentUser?.fullName || '',
-    phone: currentUser?.phone || '',
+    fullName: '',
+    phone: '',
     address: '',
     city: 'Bitola',
     country: 'North Macedonia'
   });
 
-  const handleConfirmOrder = (e: React.FormEvent) => {
+  // Fetch current authenticated user
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        // Try to pre-fill from profile
+        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+        if (profile) setShippingData(prev => ({ ...prev, fullName: profile.full_name || '', email: user.email }));
+      }
+    };
+    getUser();
+  }, []);
+
+  const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const shippingCost = subtotal > 50 ? 0 : 5;
+    const finalTotal = subtotal + shippingCost;
     
-    const cartItems = JSON.parse(localStorage.getItem('district_cart') || '[]');
-    
-    const orderData = {
-      id: Math.floor(100000 + Math.random() * 900000), // Random 6-digit ID
-      ...shippingData,
-      items: cartItems,
-      total: cartItems.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0),
-      date: new Date().toISOString(),
-      user: currentUser ? currentUser.email : 'Guest'
+    // Create professional order number: DV-random
+    const orderNumber = `DV-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const orderPayload = {
+      order_number: orderNumber,
+      user_id: user?.id || null, // Null for guests
+      customer_name: shippingData.fullName,
+      email: user?.email || "GUEST_ORDER", 
+      address: `${shippingData.address}, ${shippingData.city}, ${shippingData.country}`,
+      total_amount: finalTotal,
+      items: cart, // Stores as JSONB
+      status: 'pending'
     };
 
-    if (currentUser) {
-      const allUsers = JSON.parse(localStorage.getItem('district_users') || '[]');
-      const updatedUsers = allUsers.map((u: any) => {
-        if (u.email === currentUser.email) {
-          return { ...u, history: [...(u.history || []), orderData] };
-        }
-        return u;
-      });
-      localStorage.setItem('district_users', JSON.stringify(updatedUsers));
-      localStorage.setItem('district_current_user', JSON.stringify({
-        ...currentUser,
-        history: [...(currentUser.history || []), orderData]
-      }));
+    const { error } = await supabase
+      .from('orders')
+      .insert([orderPayload]);
+
+    if (error) {
+      alert("Error placing order: " + error.message);
+      setLoading(false);
+      return;
     }
 
-    localStorage.removeItem('district_cart');
+    clearCart();
+    alert(`ORDER PLACED! Order Number: ${orderNumber}`);
     
-    // NEW: Success logic with choice to visit Dashboard
-    const viewHistory = window.confirm('ORDER PLACED SUCCESSFULLY! Would you like to view your purchase history?');
-    
-    if (viewHistory && currentUser) {
+    if (user) {
       navigate('/dashboard');
     } else {
       navigate('/');
     }
-    window.location.reload(); 
   };
 
   const inputStyles = "w-full border-2 border-black p-4 font-bold outline-none focus:bg-gray-50 uppercase text-xs tracking-widest transition-colors";
@@ -61,9 +82,9 @@ export default function CheckoutFinal() {
     <div className="max-w-4xl mx-auto px-4 py-20 font-sans text-black">
       <div className="flex justify-between items-end mb-12">
         <h1 className="text-5xl font-black tracking-tighter uppercase">Finalize Order</h1>
-        {currentUser && (
+        {user && (
           <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-            Authenticated: {currentUser.email}
+            Member: {user.email}
           </span>
         )}
       </div>
@@ -72,14 +93,8 @@ export default function CheckoutFinal() {
         <div className="space-y-6">
           <h2 className="text-xs font-black uppercase tracking-[0.3em] border-b-2 border-black pb-2 mb-8">Shipping Address</h2>
           <div className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Full Name (Auto-filled)</label>
-              <input required type="text" value={shippingData.fullName} className={inputStyles} onChange={(e) => setShippingData({...shippingData, fullName: e.target.value})} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Contact Number (Auto-filled)</label>
-              <input required type="tel" value={shippingData.phone} className={inputStyles} onChange={(e) => setShippingData({...shippingData, phone: e.target.value})} />
-            </div>
+            <input required type="text" placeholder="Full Name" value={shippingData.fullName} className={inputStyles} onChange={(e) => setShippingData({...shippingData, fullName: e.target.value})} />
+            <input required type="tel" placeholder="Phone Number" value={shippingData.phone} className={inputStyles} onChange={(e) => setShippingData({...shippingData, phone: e.target.value})} />
             <input required type="text" placeholder="Street Address" value={shippingData.address} className={inputStyles} onChange={(e) => setShippingData({...shippingData, address: e.target.value})} />
             <div className="grid grid-cols-2 gap-4">
               <input required type="text" placeholder="City" value={shippingData.city} className={inputStyles} onChange={(e) => setShippingData({...shippingData, city: e.target.value})} />
@@ -107,8 +122,12 @@ export default function CheckoutFinal() {
             </div>
           </div>
           <div className="pt-10">
-            <button type="submit" className="w-full bg-black text-white py-5 font-black tracking-[0.3em] text-xs hover:bg-white hover:text-black border-2 border-black transition-all uppercase shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)]">
-              Confirm Order
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-black text-white py-5 font-black tracking-[0.3em] text-xs hover:bg-white hover:text-black border-2 border-black transition-all uppercase shadow-[10px_10px_0px_0px_rgba(0,0,0,0.1)] disabled:bg-gray-500"
+            >
+              {loading ? "PROCESSING..." : "Confirm Order"}
             </button>
           </div>
         </div>

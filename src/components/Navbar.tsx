@@ -1,36 +1,45 @@
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 export default function Navbar({ cartCount }: { cartCount: number }) {
   const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
   const navLinkStyles = "px-4 py-2 hover:bg-white hover:text-black transition-all duration-300 rounded-sm";
-  
-  // Check if a user is logged in
-  const currentUser = JSON.parse(localStorage.getItem('district_current_user') || 'null');
 
-  const handleLogout = () => {
-    localStorage.removeItem('district_current_user');
+  // Listen for Auth changes (Login/Logout)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/');
-    window.location.reload();
   };
 
   return (
     <nav className="sticky top-0 z-50 bg-black text-white uppercase tracking-widest text-xs font-black border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-20">
-          {/* Logo */}
           <Link to="/" className="text-xl font-black tracking-tighter">
             DISTRICT VINYL SHOP
           </Link>
           
-          {/* Navigation Links */}
           <div className="hidden md:flex space-x-2 items-center">
             <Link to="/" className={navLinkStyles}>Home</Link>
             <Link to="/shop" className={navLinkStyles}>Shop</Link>
             <Link to="/about" className={navLinkStyles}>About Us</Link>
             <Link to="/contact" className={navLinkStyles}>Contact</Link>
             
-            {/* USER LOGIC ADDED HERE */}
-            {currentUser ? (
+            {user ? (
               <>
                 <Link to="/dashboard" className={navLinkStyles}>Profile</Link>
                 <button onClick={handleLogout} className="px-4 py-2 hover:bg-red-600 transition-all duration-300 rounded-sm">

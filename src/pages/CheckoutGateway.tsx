@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase'; // Import Supabase
 
 export default function CheckoutGateway() {
   const navigate = useNavigate();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Form States
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
 
   const validateEmail = (email: string) => {
     return String(email)
@@ -18,59 +19,67 @@ export default function CheckoutGateway() {
       .match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
   };
 
-  const handleAuth = () => {
+  const handleAuth = async () => {
     setError('');
-    const savedUsers = JSON.parse(localStorage.getItem('district_users') || '[]');
+    
+    if (!email || !password) return setError('EMAIL AND PASSWORD ARE REQUIRED');
+    if (!validateEmail(email)) return setError('PLEASE ENTER A VALID EMAIL ADDRESS');
+    if (password.length < 6) return setError('PASSWORD MUST BE AT LEAST 6 CHARACTERS');
 
-    // Validation Logic
-    if (!email || !password) {
-      setError('EMAIL AND PASSWORD ARE REQUIRED');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError('PLEASE ENTER A VALID EMAIL ADDRESS');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('PASSWORD MUST BE AT LEAST 6 CHARACTERS');
-      return;
-    }
+    setLoading(true);
 
     if (isRegistering) {
-      if (!fullName || !phone) {
-        setError('NAME AND PHONE ARE REQUIRED FOR REGISTRATION');
+      if (!fullName) {
+        setLoading(false);
+        return setError('FULL NAME IS REQUIRED FOR REGISTRATION');
+      }
+
+      // 1. Sign up user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message.toUpperCase());
+        setLoading(false);
         return;
       }
 
-      if (savedUsers.find((u: any) => u.email === email)) {
-        setError('EMAIL ALREADY REGISTERED');
-        return;
+      // 2. Create Profile row (the foreign key handles the ID link)
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{ 
+            id: authData.user.id, 
+            email: email, 
+            full_name: fullName, 
+            role: 'customer' 
+          }]);
+
+        if (profileError) {
+          setError(profileError.message.toUpperCase());
+          setLoading(false);
+          return;
+        }
       }
 
-      // Create New User
-      const newUser = { 
-        email, 
-        password, 
-        fullName, 
-        phone, 
-        history: [] 
-      };
-      
-      localStorage.setItem('district_users', JSON.stringify([...savedUsers, newUser]));
-      localStorage.setItem('district_current_user', JSON.stringify(newUser));
       navigate('/checkout-final');
     } else {
       // Login Logic
-      const user = savedUsers.find((u: any) => u.email === email && u.password === password);
-      if (user) {
-        localStorage.setItem('district_current_user', JSON.stringify(user));
-        navigate('/checkout-final');
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (loginError) {
+        setError(loginError.message.toUpperCase());
+        setLoading(false);
       } else {
-        setError('INVALID EMAIL OR PASSWORD');
+        navigate('/checkout-final');
       }
     }
+    setLoading(false);
   };
 
   const inputStyles = "w-full border-2 border-black p-4 font-bold outline-none focus:bg-gray-50 uppercase text-xs tracking-widest transition-colors";
@@ -81,7 +90,6 @@ export default function CheckoutGateway() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-black border-2 border-black shadow-[20px_20px_0px_0px_rgba(0,0,0,0.05)]">
         
-        {/* LEFT SIDE: Member Portal */}
         <div className="bg-white p-12 flex flex-col justify-between">
           <div>
             <h2 className="text-3xl font-black uppercase tracking-tighter mb-4 text-black">
@@ -101,22 +109,13 @@ export default function CheckoutGateway() {
               )}
 
               {isRegistering && (
-                <>
-                  <input 
-                    type="text" 
-                    placeholder="Full Name" 
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className={inputStyles}
-                  />
-                  <input 
-                    type="tel" 
-                    placeholder="Phone Number" 
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className={inputStyles}
-                  />
-                </>
+                <input 
+                  type="text" 
+                  placeholder="Full Name" 
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className={inputStyles}
+                />
               )}
 
               <input 
@@ -139,9 +138,10 @@ export default function CheckoutGateway() {
           <div className="mt-12 space-y-4">
             <button 
               onClick={handleAuth}
-              className="w-full bg-black text-white py-4 font-black tracking-[0.2em] text-[10px] hover:bg-white hover:text-black border-2 border-black transition-all uppercase"
+              disabled={loading}
+              className="w-full bg-black text-white py-4 font-black tracking-[0.2em] text-[10px] hover:bg-white hover:text-black border-2 border-black transition-all uppercase disabled:bg-gray-400"
             >
-              {isRegistering ? 'Register & Continue' : 'Login & Continue'}
+              {loading ? 'PROCESSING...' : (isRegistering ? 'Register & Continue' : 'Login & Continue')}
             </button>
             
             <button 
@@ -153,7 +153,6 @@ export default function CheckoutGateway() {
           </div>
         </div>
 
-        {/* RIGHT SIDE: Guest Checkout */}
         <div className="bg-gray-50 p-12 flex flex-col justify-center items-center text-center">
           <div className="mb-8">
             <span className="text-4xl">📦</span>
@@ -164,10 +163,7 @@ export default function CheckoutGateway() {
           </p>
           
           <button 
-            onClick={() => {
-              localStorage.removeItem('district_current_user');
-              navigate('/checkout-final');
-            }}
+            onClick={() => navigate('/checkout-final')}
             className="w-full max-w-xs bg-white text-black py-4 font-black tracking-[0.2em] text-[10px] hover:bg-black hover:text-white border-2 border-black transition-all uppercase"
           >
             Continue as Guest

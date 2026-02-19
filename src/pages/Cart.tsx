@@ -16,6 +16,10 @@ interface CartProps {
 
 export default function Cart({ cart, onRemove, onUpdate }: CartProps) {
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  
+  // Logic: Free shipping over €50, else €5
+  const shippingCost = subtotal > 50 ? 0 : 5;
+  const total = subtotal + shippingCost;
 
   if (cart.length === 0) {
     return (
@@ -86,14 +90,15 @@ export default function Cart({ cart, onRemove, onUpdate }: CartProps) {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="font-medium text-gray-500 uppercase tracking-widest text-[10px]">Shipping</span>
-                <span className="font-bold italic text-[10px] uppercase text-black">Calculated at checkout</span>
+                <span className="font-bold text-black uppercase text-[10px]">
+                  {shippingCost === 0 ? "FREE" : `€${shippingCost.toFixed(2)}`}
+                </span>
               </div>
             </div>
             <div className="flex justify-between items-end mt-6 mb-8">
               <span className="text-xs font-black uppercase tracking-widest text-black">Total</span>
-              <span className="text-3xl font-black text-black">€{subtotal.toFixed(2)}</span>
+              <span className="text-3xl font-black text-black">€{total.toFixed(2)}</span>
             </div>
-            {/* UPDATED: Button is now a Link to Checkout Gateway */}
             <Link 
               to="/checkout-gateway" 
               className="w-full bg-black text-white py-4 font-black tracking-[0.2em] text-[10px] hover:bg-white hover:text-black border-2 border-black transition-all uppercase block text-center"

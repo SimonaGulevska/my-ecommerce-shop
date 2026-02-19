@@ -7,31 +7,28 @@ A high-contrast, brutalist e-commerce platform for vinyl enthusiasts. Built with
 * **Language:** TypeScript
 * **Styling:** Tailwind CSS (Brutalist UI)
 * **Routing:** React Router DOM v6
-* **State & Persistence:** LocalStorage API (Current) / Supabase (Migration Planned)
+* **Backend & Auth:** Supabase (Cloud Database, Edge Functions & Auth)
+* **State & Persistence:** React State + LocalStorage (Cart)
 
 ## 🚀 Features
 
 ### 🛒 Shopping Experience
-* **Dynamic Inventory:** Browse a curated collection of vinyl records with high-quality imagery.
-* **Persistent Cart:** State-managed cart system that survives page refreshes.
-* **Smart Checkout Gateway:** Logic-gated checkout process allowing Guest access or Member authentication.
+* **Cloud Inventory:** Browse a live collection of vinyl records fetched directly from a Supabase PostgreSQL database.
+* **Persistent Cart:** State-managed cart system that survives page refreshes via LocalStorage.
+* **Smart Checkout Gateway:** Logic-gated checkout process allowing Guest access or authenticated Supabase Member access.
 
 ### 👤 User Systems
-* **Authentication:** Full Register/Login flow with manual and auto-fill shipping logic.
-* **Member Dashboard:** Personal profile area displaying "Total Collection Value" and historical purchase data.
-* **Order History:** Detailed archive of past orders including dates, unique IDs, and itemized lists.
+* **Authentication:** Secure Register/Login flow powered by Supabase Auth with automatic profile creation.
+* **Member Dashboard:** Real-time personal profile area displaying "Total Collection Value" and live historical purchase data from the cloud.
+* **Order History:** Detailed archive of past orders including unique `DV-XXXXXX` order numbers, status tracking, and itemized lists.
 
 ### 🛠 Administrative Tools
-* **Inventory Manager:** Dedicated Admin dashboard to add new Vinyls (records) or Vinyl Gear, set pricing, and manage stock.
+* **Inventory Manager:** Dedicated Admin dashboard to push new products to the cloud database.
 * **Product Interface:** Support for multiple images, SKUs, and detailed descriptions.
-
-## 🔜 Roadmap
-When we switch to Supabase, we are going to:
-* **Users Table:** Move from the `district_users` array to a Supabase Auth + `profiles` table.
-* **Products Table:** Move from `district_products` to a `products` table in the cloud.
-* **Storage:** Instead of long Base64 strings or local URLs, your images will be stored in **Supabase Storage Buckets**, and the database will just save the link.
+* **Cloud Storage:** Optimized image handling using external URLs (Supabase Storage ready).
 
 ## ⚡ Setup (Local Development)
 * **1.:** Open terminal in my-ecommerce-shop folder.
 * **2.:** Run `npm install` to install dependencies.
-* **3.:** Run `npm run dev` to start the local development server.
+* **3.:** Ensure your `.env` file contains your `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+* **4.:** Run `npm run dev` to start the local development server.

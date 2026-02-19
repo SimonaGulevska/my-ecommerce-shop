@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '../lib/supabase'; // Import Supabase client
 
 export default function Contact() {
   // State for form data
@@ -13,8 +14,9 @@ export default function Contact() {
   // State for validation errors
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false); // New: Loading state for the button
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Simple Validation
@@ -29,11 +31,32 @@ export default function Contact() {
       return;
     }
 
-    // If validation passes
-    console.log('Form Submitted:', formData);
+    setLoading(true);
     setError('');
-    setSuccess(true);
-    // Here you would eventually send the data to your Laravel backend
+
+    // --- UPDATED: Send to Supabase ---
+    const { error: dbError } = await supabase
+      .from('contact_messages')
+      .insert([
+        {
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          order_number: formData.orderNumber || null,
+          message: formData.message
+        }
+      ]);
+
+    setLoading(false);
+
+    if (dbError) {
+      setError('Something went wrong: ' + dbError.message);
+      setSuccess(false);
+    } else {
+      setSuccess(true);
+      setFormData({ firstName: '', lastName: '', email: '', orderNumber: '', message: '' });
+      // Clear inputs manually if needed or use value={formData...} in inputs
+    }
   };
 
   return (
@@ -44,11 +67,13 @@ export default function Contact() {
         <div className="space-y-10">
           <header>
             <h1 className="text-5xl font-black tracking-tighter mb-8 border-b-4 border-black inline-block uppercase">GET IN TOUCH</h1>
-            <p className="text-lg md:text-xl leading-relaxed mb-10 text-gray-900">
-              If you have any questions about our products or you just need information about our store
-              fill out the following form. 
-            <p>Don't hesitate!</p>
-            </p>
+            <div className="text-lg md:text-xl leading-relaxed mb-10 text-gray-900">
+              <p>
+                If you have any questions about our products or you just need information about our store
+                fill out the following form. 
+              </p>
+              <p>Don't hesitate!</p>
+            </div>
           </header>
 
           {/* Error/Success Messages */}
@@ -60,12 +85,14 @@ export default function Contact() {
               <input 
                 type="text" 
                 placeholder="FIRST NAME *" 
+                value={formData.firstName}
                 className="w-full border-2 border-black p-4 text-sm font-bold outline-none focus:bg-gray-50 transition"
                 onChange={(e) => setFormData({...formData, firstName: e.target.value})}
               />
               <input 
                 type="text" 
                 placeholder="LAST NAME *" 
+                value={formData.lastName}
                 className="w-full border-2 border-black p-4 text-sm font-bold outline-none focus:bg-gray-50 transition"
                 onChange={(e) => setFormData({...formData, lastName: e.target.value})}
               />
@@ -75,13 +102,14 @@ export default function Contact() {
               <input 
                 type="email" 
                 placeholder="EMAIL ADDRESS *" 
+                value={formData.email}
                 className="w-full border-2 border-black p-4 text-sm font-bold outline-none focus:bg-gray-50 transition"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
               />
-              {/* NEW: Order Number Field */}
               <input 
                 type="text" 
                 placeholder="ORDER NUMBER (Optional)" 
+                value={formData.orderNumber}
                 className="w-full border-2 border-black p-4 text-sm font-bold outline-none focus:bg-gray-50 transition"
                 onChange={(e) => setFormData({...formData, orderNumber: e.target.value})}
               />
@@ -89,6 +117,7 @@ export default function Contact() {
 
             <textarea 
               placeholder="HOW CAN WE HELP? *" 
+              value={formData.message}
               rows={4} 
               className="w-full border-2 border-black p-4 text-sm font-bold outline-none focus:bg-gray-50 transition resize-none"
               onChange={(e) => setFormData({...formData, message: e.target.value})}
@@ -96,14 +125,15 @@ export default function Contact() {
             
             <button 
               type="submit"
-              className="bg-black text-white px-12 py-5 text-sm font-black tracking-widest hover:bg-gray-800 transition uppercase w-full"
+              disabled={loading}
+              className="bg-black text-white px-12 py-5 text-sm font-black tracking-widest hover:bg-gray-800 transition uppercase w-full disabled:bg-gray-400"
             >
-              SUBMIT
+              {loading ? 'SENDING...' : 'SUBMIT'}
             </button>
           </form>
         </div>
 
-        {/* Right Side: Map remains the same */}
+        {/* Right Side: Map */}
         <div className="h-[500px] lg:h-auto border-4 border-black shadow-xl overflow-hidden">
           <iframe 
             width="100%" height="100%" frameBorder="0" title="District Vinyl Location"

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { supabase } from './lib/supabase'; // 1. Added Supabase Import
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -27,26 +28,40 @@ interface CartItem extends Product {
 }
 
 function App() {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const savedProducts = localStorage.getItem('district_products');
-    return savedProducts ? JSON.parse(savedProducts) : [];
-  });
+  // 2. Modified: products now start empty and fetch from Cloud
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     const savedCart = localStorage.getItem('district_cart');
     return savedCart ? JSON.parse(savedCart) : [];
   });
 
+  // 3. New: Fetch products from Supabase on Load
   useEffect(() => {
-    localStorage.setItem('district_products', JSON.stringify(products));
-  }, [products]);
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: false });
 
+      if (error) {
+        console.error('Error fetching products:', error.message);
+      } else if (data) {
+        setProducts(data);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  // Keep: Sync cart to localStorage (We'll move Users/Orders later)
   useEffect(() => {
     localStorage.setItem('district_cart', JSON.stringify(cart));
   }, [cart]);
 
   const addProduct = (newProduct: Product) => {
-    setProducts([...products, newProduct]);
+    // This UI update remains the same, but Admin.tsx will now handle the DB insert
+    setProducts([newProduct, ...products]);
   };
 
   const addToCart = (product: Product, amount: number) => {
@@ -74,6 +89,12 @@ function App() {
     ));
   };
 
+  // Helper to clear cart after successful order
+  const clearCart = () => {
+    setCart([]);
+    localStorage.removeItem('district_cart');
+  };
+
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
@@ -89,7 +110,13 @@ function App() {
             <Route path="/shop" element={<Shop products={products} onAddToCart={addToCart} />} />
             <Route path="/cart" element={<Cart cart={cart} onRemove={removeFromCart} onUpdate={updateQuantity} />} />
             <Route path="/checkout-gateway" element={<CheckoutGateway />} />
-            <Route path="/checkout-final" element={<CheckoutFinal />} />
+            
+            {/* UPDATED: Passing cart and clearCart to CheckoutFinal */}
+            <Route 
+              path="/checkout-final" 
+              element={<CheckoutFinal cart={cart} clearCart={clearCart} />} 
+            />
+            
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<Admin onAddProduct={addProduct} />} />
           </Routes>
